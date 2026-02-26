@@ -37,6 +37,24 @@ sudo python3 mdns-hosts.py --write-hosts
 - Writes a managed block between marker comments in `/etc/hosts`, replacing any previous block
 - Leaves all existing manual entries in `/etc/hosts` untouched
 
+## Automatic Updates (systemd timer)
+
+To keep `/etc/hosts` fresh without thinking about it, install the included systemd units:
+
+```bash
+sudo cp mdns-hosts.py /usr/local/bin/mdns-hosts.py
+sudo cp systemd/mdns-hosts.service /etc/systemd/system/
+sudo cp systemd/mdns-hosts.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mdns-hosts.timer
+```
+
+This runs the script once a minute after boot, then hourly. Check on it with:
+
+```bash
+journalctl -u mdns-hosts.service
+```
+
 ## Example output
 
 ```

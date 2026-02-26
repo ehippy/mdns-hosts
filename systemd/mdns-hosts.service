@@ -1,0 +1,8 @@
+[Unit]
+Description=Update /etc/hosts with mDNS-discovered hosts
+After=network-online.target avahi-daemon.service
+Requires=avahi-daemon.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/bin/mdns-hosts.py --write-hosts
