@@ -13,6 +13,8 @@ import sys
 import re
 from pathlib import Path
 
+VERSION = "1.0.0"
+
 HOSTS_FILE = Path("/etc/hosts")
 MARKER_START = "# BEGIN MDNS-HOSTS (managed by mdns-hosts.py)"
 MARKER_END   = "# END MDNS-HOSTS"
@@ -43,10 +45,28 @@ def is_clean_hostname(hostname: str) -> bool:
 
 def discover_hosts() -> dict[str, str]:
     """Run avahi-browse and return {hostname: ipv4} for all resolved local hosts."""
-    result = subprocess.run(
-        ["avahi-browse", "-a", "-r", "-p", "-t"],
-        capture_output=True, text=True
-    )
+    try:
+        result = subprocess.run(
+            ["avahi-browse", "-a", "-r", "-p", "-t"],
+            capture_output=True, text=True, timeout=30, errors='replace'
+        )
+    except FileNotFoundError:
+        print("error: avahi-browse not found. Install avahi-tools:", file=sys.stderr)
+        print("  Fedora/Bazzite: sudo rpm-ostree install avahi-tools", file=sys.stderr)
+        print("  Debian/Ubuntu: sudo apt install avahi-utils", file=sys.stderr)
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        print("error: avahi-browse timed out after 30 seconds", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"error: failed to run avahi-browse: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if result.returncode != 0:
+        print(f"error: avahi-browse exited with code {result.returncode}", file=sys.stderr)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        sys.exit(1)
 
     hosts = {}
     for line in result.stdout.splitlines():
@@ -84,7 +104,14 @@ def build_block(hosts: dict[str, str]) -> str:
 
 
 def update_hosts(hosts: dict[str, str], dry_run: bool = False) -> None:
-    current = HOSTS_FILE.read_text()
+    try:
+        current = HOSTS_FILE.read_text()
+    except FileNotFoundError:
+        print(f"error: {HOSTS_FILE} not found", file=sys.stderr)
+        sys.exit(1)
+    except PermissionError:
+        print(f"error: permission denied reading {HOSTS_FILE}", file=sys.stderr)
+        sys.exit(1)
 
     # strip out any existing managed block
     pattern = re.compile(
@@ -101,15 +128,36 @@ def update_hosts(hosts: dict[str, str], dry_run: bool = False) -> None:
         print(new_content)
         return
 
-    HOSTS_FILE.write_text(new_content)
+    try:
+        HOSTS_FILE.write_text(new_content)
+    except PermissionError:
+        print(f"error: permission denied writing {HOSTS_FILE}", file=sys.stderr)
+        sys.exit(1)
+    
     print(f"Updated /etc/hosts with {len(hosts)} mDNS host(s).")
 
 
+def print_help():
+    print(__doc__)
+    print("Options:")
+    print("  --write-hosts    Actually update /etc/hosts (requires sudo)")
+    print("  --help           Show this help message")
+    print("  --version        Show version")
+
+
 def main():
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print_help()
+        sys.exit(0)
+    
+    if "--version" in sys.argv:
+        print(f"mdns-hosts {VERSION}")
+        sys.exit(0)
+
     dry_run = "--write-hosts" not in sys.argv
 
     if not dry_run and os.geteuid() != 0:
-        print("error: run with sudo to write /etc/hosts (or omit --write-hosts for dry run)")
+        print("error: --write-hosts requires root. Run with sudo or omit for dry-run", file=sys.stderr)
         sys.exit(1)
 
     print("Scanning for mDNS hosts...", flush=True)
