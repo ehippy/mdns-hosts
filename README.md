@@ -29,10 +29,27 @@ Actually update `/etc/hosts`:
 sudo python3 mdns-hosts.py --write-hosts
 ```
 
+### Output Formats
+
+Output as JSON for use in scripts or automation:
+```
+python3 mdns-hosts.py --format json
+```
+
+Minimal output for automation (quiet mode):
+```
+python3 mdns-hosts.py --quiet --write-hosts
+```
+
+Include IPv6 addresses:
+```
+python3 mdns-hosts.py --ipv6 --write-hosts
+```
+
 ## What it does
 
 - Runs `avahi-browse -a -r -p -t` to enumerate all resolved mDNS services
-- Filters to IPv4 `.local` hostnames only
+- Filters to IPv4 `.local` hostnames only (IPv6 available with `--ipv6`)
 - Skips garbage hostnames: UUIDs, raw MAC addresses, hex blobs, escape-encoded names
 - Writes a managed block between marker comments in `/etc/hosts`, replacing any previous block
 - Leaves all existing manual entries in `/etc/hosts` untouched
@@ -50,8 +67,7 @@ sudo systemctl enable --now mdns-hosts.timer
 ```
 
 This runs the script once a minute after boot, then hourly. Check on it with:
-
-```bash
+```
 journalctl -u mdns-hosts.service
 ```
 
@@ -67,11 +83,20 @@ Found 8 host(s):
 ```
 
 The managed block in `/etc/hosts` looks like:
-
 ```
 # BEGIN MDNS-HOSTS (managed by mdns-hosts.py)
 192.168.50.104       gizmo.local
 192.168.50.185       octopi.local
 192.168.50.179       pihole.local
 # END MDNS-HOSTS
+```
+
+### JSON output example
+
+```json
+[
+  {"hostname": "gizmo.local", "address": "192.168.50.104"},
+  {"hostname": "octopi.local", "address": "192.168.50.185"},
+  {"hostname": "pihole.local", "address": "192.168.50.179"}
+]
 ```
