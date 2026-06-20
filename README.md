@@ -29,6 +29,12 @@ Actually update `/etc/hosts`:
 sudo python3 mdns-hosts.py --write-hosts
 ```
 
+Exclude specific hosts:
+```
+sudo python3 mdns-hosts.py --write-hosts --exclude=iRobot --exclude=Camera
+```
+Use `--exclude=pattern` (repeatable) to skip hosts whose name contains the pattern. The pattern is matched against the hostname with `.local` stripped.
+
 ## What it does
 
 - Runs `avahi-browse -a -r -p -t` to enumerate all resolved mDNS services
@@ -53,6 +59,13 @@ This runs the script once a minute after boot, then hourly. Check on it with:
 
 ```bash
 journalctl -u mdns-hosts.service
+```
+
+## Tests
+
+Run the test suite:
+```bash
+python3 -m pytest tests/ -v
 ```
 
 ## Example output

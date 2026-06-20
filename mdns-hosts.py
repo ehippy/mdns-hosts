@@ -95,6 +95,27 @@ def discover_hosts() -> dict[str, str]:
     return hosts
 
 
+def exclude_hosts(hosts: dict[str, str], exclude: list[str]) -> dict[str, str]:
+    """Filter out hosts whose name contains any exclude pattern.
+    
+    Patterns are matched as substrings (case-sensitive) against the hostname.
+    .local suffix and port suffixes (e.g. ':53' from avahi) are stripped before matching.
+    """
+    if not exclude:
+        return hosts
+
+    result = {}
+    for hostname, address in hosts.items():
+        # Strip .local and optional port suffix (avahi reports ported services as hostname:port)
+        name = hostname.removesuffix(".local")
+        if ":" in name:
+            name = name.rsplit(":", 1)[0]
+        
+        if not any(p in name for p in exclude):
+            result[hostname] = address
+    return result
+
+
 def build_block(hosts: dict[str, str]) -> str:
     lines = [MARKER_START]
     for hostname, address in sorted(hosts.items()):
@@ -141,6 +162,7 @@ def print_help():
     print(__doc__)
     print("Options:")
     print("  --write-hosts    Actually update /etc/hosts (requires sudo)")
+    print("  --exclude PAT    Exclude hosts whose name contains PAT (repeatable)")
     print("  --help           Show this help message")
     print("  --version        Show version")
 
@@ -155,6 +177,11 @@ def main():
         sys.exit(0)
 
     dry_run = "--write-hosts" not in sys.argv
+    exclude_patterns = [
+        val.split("=", 1)[1]
+        for val in sys.argv
+        if val.startswith("--exclude=")
+    ]
 
     if not dry_run and os.geteuid() != 0:
         print("error: --write-hosts requires root. Run with sudo or omit for dry-run", file=sys.stderr)
@@ -162,9 +189,13 @@ def main():
 
     print("Scanning for mDNS hosts...", flush=True)
     hosts = discover_hosts()
+    hosts = exclude_hosts(hosts, exclude_patterns)
 
     if not hosts:
-        print("No mDNS hosts found.")
+        if exclude_patterns:
+            print("No mDNS hosts found (after applying exclude filters).")
+        else:
+            print("No mDNS hosts found.")
         sys.exit(0)
 
     print(f"Found {len(hosts)} host(s):")
